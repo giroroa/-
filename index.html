@@ -1,75 +1,203 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>抽獎系統</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="theme-color" content="#10b981">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>抽獎系統</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#10b981">
+  <style>
+    /* 自定義動畫，使抽獎中的文字更平滑 */
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .animate-pulse-custom {
+      animation: pulse 1.5s infinite;
+    }
+  </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center px-4">
-  <div class="bg-white p-6 rounded shadow-md w-full max-w-md text-center">
-    <h1 class="text-2xl font-bold mb-4">抽獎系統</h1>
-    <input id="phoneInput" type="tel" maxlength="10" placeholder="輸入手機號碼" class="mb-4 p-2 border rounded w-full text-center" />
-    <button id="drawBtn" onclick="drawPrize()" class="bg-green-500 text-white py-2 px-4 rounded w-full hover:bg-green-600">開始抽獎</button>
-    <div id="animation" class="my-4 hidden text-lg font-semibold animate-spin">🎉 抽獎中...</div>
-    <div id="result" class="text-xl font-bold text-green-600 my-4"></div>
-    <div id="historyTitle" class="text-gray-800 font-semibold mt-6">📜 今日抽獎紀錄</div>
-    <ul id="recordList" class="text-sm text-left max-h-48 overflow-y-auto mt-2"></ul>
-  </div>
+  <div class="bg-white p-6 rounded shadow-md w-full max-w-md text-center">
+    <h1 class="text-2xl font-bold mb-4 text-gray-800">抽獎系統</h1>
 
-  <script>
-    const apiUrl = "https://script.google.com/macros/s/AKfycbzzaSlIj87CnFaTYLLkr4-oDse4Y-OlVyS7CccgwDpHqWwvtytsHXgAFGeYypqaomDoKQ/exec";
+    <div class="mb-4">
+      <label for="phoneInput" class="sr-only">手機號碼</label>
+      <input id="phoneInput" 
+           type="tel" 
+           maxlength="10" 
+           placeholder="輸入手機號碼 (09xxxxxxxx)" 
+           class="p-2 border rounded w-full text-center focus:ring-green-500 focus:border-green-500" 
+           pattern="09\d{8}" 
+           title="請輸入正確的10位手機號碼，以09開頭"
+           aria-describedby="phone-error" />
+      <p id="phone-error" class="text-red-500 text-sm mt-1 hidden" role="alert"></p>
+    </div>
+    
+    <button id="drawBtn" class="bg-green-500 text-white py-2 px-4 rounded w-full hover:bg-green-600 transition duration-300 ease-in-out">開始抽獎</button>
+    
+    <div id="animation" class="my-4 hidden text-lg font-semibold text-green-700 animate-pulse-custom">🎉 抽獎中...</div>
+    <div id="result" class="text-xl font-bold my-4"></div>
+    
+    <div class="border-t border-gray-200 mt-6 pt-6">
+      <div id="historyTitle" class="text-gray-800 font-semibold mb-2">📜 今日抽獎紀錄</div>
+      <ul id="recordList" class="text-sm text-left max-h-48 overflow-y-auto mt-2 border border-gray-200 p-2 rounded bg-gray-50"></ul>
+    </div>
+  </div>
 
-    async function drawPrize() {
-      const phone = document.getElementById("phoneInput").value.trim();
-      if (!/^09\d{8}$/.test(phone)) return alert("請輸入正確的手機號碼");
+  <script>
+    // 請替換為您部署後的 Google Apps Script 網路應用程式 URL
+    const apiUrl = "https://script.google.com/macros/s/AKfycbzzaSlIj87CnFaTYLLkr4-oDse4Y-OlVyS7CccgwDpHqWwvtytsHXgAFGeYypqaomDoKQ/exec";
 
-      document.getElementById("drawBtn").disabled = true;
-      const animation = document.getElementById("animation");
-      animation.classList.remove("hidden");
-      document.getElementById("result").textContent = "";
+    const phoneInput = document.getElementById("phoneInput");
+    const drawBtn = document.getElementById("drawBtn");
+    const animationDiv = document.getElementById("animation");
+    const resultDiv = document.getElementById("result");
+    const recordList = document.getElementById("recordList");
+    const phoneError = document.getElementById("phone-error");
 
-      let dots = 1;
-      const loading = setInterval(() => {
-        animation.textContent = "🎉 抽獎中" + ".".repeat(dots++ % 4);
-      }, 300);
+    let loadingInterval; // 用於控制動畫間隔的變數
 
-      try {
-        const res = await fetch(apiUrl, {
-          method: "POST",
-          body: JSON.stringify({ action: "draw", phone }),
-          headers: { "Content-Type": "application/json" }
-        });
-        const data = await res.json();
-        clearInterval(loading);
-        animation.classList.add("hidden");
-        document.getElementById("result").textContent = `🎁 抽中：${data.result}`;
-        loadRecords();
-      } catch (err) {
-        alert("抽獎失敗，請稍後再試");
-        clearInterval(loading);
-      } finally {
-        document.getElementById("drawBtn").disabled = false;
-      }
-    }
+    // 抽獎函數
+    async function drawPrize() {
+      const phone = phoneInput.value.trim();
 
-    async function loadRecords() {
-      const res = await fetch(apiUrl + "?action=getRecords");
-      const data = await res.json();
-      const list = document.getElementById("recordList");
-      list.innerHTML = "";
-      const today = new Date().toISOString().split("T")[0];
-      data.filter(r => r.time.startsWith(today)).reverse().forEach(r => {
-        const li = document.createElement("li");
-        li.textContent = `[${r.time.slice(11, 16)}] ${r.phone} → ${r.result}`;
-        list.appendChild(li);
-      });
-    }
+      // 手機號碼驗證
+      if (!phone) {
+        showError("手機號碼不能為空。");
+        return;
+      }
+      if (!/^09\d{8}$/.test(phone)) {
+        showError("請輸入正確的10位手機號碼，必須以09開頭。");
+        return;
+      }
+      hideError(); // 驗證通過，隱藏錯誤訊息
 
-    loadRecords();
-  </script>
+      // 禁用按鈕，顯示動畫
+      drawBtn.disabled = true;
+      animationDiv.classList.remove("hidden");
+      resultDiv.textContent = ""; // 清空舊的結果訊息
+
+      // 抽獎動畫的點點效果
+      let dots = 1;
+      loadingInterval = setInterval(() => {
+        animationDiv.textContent = `🎉 抽獎中${".".repeat(dots++ % 4)}`;
+      }, 300);
+
+      try {
+        const res = await fetch(apiUrl, {
+          method: "POST",
+          body: JSON.stringify({ action: "draw", phone }),
+          headers: { "Content-Type": "application/json" }
+        });
+
+        // 檢查 HTTP 響應狀態
+        if (!res.ok) {
+          const errorBody = await res.text();
+          throw new Error(`網路請求失敗: ${res.status} - ${errorBody}`);
+        }
+
+        const data = await res.json();
+
+        // 停止動畫
+        clearInterval(loadingInterval);
+        animationDiv.classList.add("hidden");
+
+        // 顯示抽獎結果
+        if (data.error) {
+          resultDiv.className = "text-xl font-bold my-4 text-red-600";
+          resultDiv.textContent = `🚫 抽獎失敗: ${data.error}`;
+          console.error("Apps Script 返回錯誤:", data.details || data.error);
+        } else {
+          resultDiv.className = "text-xl font-bold my-4 text-green-600";
+          resultDiv.textContent = `🎁 抽中：${data.result}`;
+          phoneInput.value = ""; // 抽獎成功後清空手機號碼
+        }
+        // 無論成功或失敗，都重新載入紀錄
+        loadRecords();
+      } catch (err) {
+        clearInterval(loadingInterval);
+        animationDiv.classList.add("hidden");
+        resultDiv.className = "text-xl font-bold my-4 text-red-600";
+        resultDiv.textContent = `🚨 抽獎過程出錯，請稍後再試。`;
+        console.error("抽獎請求發生錯誤:", err);
+      } finally {
+        drawBtn.disabled = false; // 無論如何都啟用按鈕
+      }
+    }
+
+    // 載入抽獎紀錄函數
+    async function loadRecords() {
+      try {
+        const res = await fetch(apiUrl + "?action=getRecords");
+        if (!res.ok) {
+          throw new Error(`無法載入紀錄: ${res.status}`);
+        }
+        const data = await res.json();
+
+        recordList.innerHTML = ""; // 清空舊紀錄
+
+        // 獲取今天的日期，格式為 YYYY/MM/DD (與 Google Sheets 預設格式匹配)
+        const now = new Date();
+        const todayYear = now.getFullYear();
+        const todayMonth = (now.getMonth() + 1).toString().padStart(2, '0');
+        const todayDay = now.getDate().toString().padStart(2, '0');
+        const todaySheetFormat = `${todayYear}/${todayMonth}/${todayDay}`;
+
+        if (data && data.length > 0) {
+          data.filter(r => r.time && r.time.startsWith(todaySheetFormat)) // 過濾今日紀錄
+              .reverse() // 最新紀錄顯示在最上方
+              .forEach(r => {
+                const li = document.createElement("li");
+                // 格式化時間為 HH:MM:SS
+                const recordDateTime = new Date(r.time);
+                const formattedTime = recordDateTime.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+                li.textContent = `[${formattedTime}] ${r.phone} → ${r.result}`;
+                recordList.appendChild(li);
+              });
+        } else {
+          recordList.innerHTML = '<li class="text-gray-500">目前沒有今日抽獎紀錄。</li>';
+        }
+      } catch (err) {
+        console.error("載入抽獎紀錄失敗:", err);
+        recordList.innerHTML = `<li class="text-red-500">無法載入抽獎紀錄。</li>`;
+      }
+    }
+
+    // 顯示手機號碼錯誤訊息
+    function showError(message) {
+      phoneError.textContent = message;
+      phoneError.classList.remove("hidden");
+      phoneInput.classList.add("border-red-500", "focus:border-red-500");
+      phoneInput.focus();
+    }
+
+    // 隱藏手機號碼錯誤訊息
+    function hideError() {
+      phoneError.classList.add("hidden");
+      phoneInput.classList.remove("border-red-500", "focus:border-red-500");
+    }
+
+    // 事件監聽器
+    document.addEventListener('DOMContentLoaded', () => {
+      loadRecords(); // 頁面載入時自動載入紀錄
+
+      // 點擊抽獎按鈕
+      drawBtn.addEventListener('click', drawPrize);
+
+      // 手機號碼輸入框按下 Enter 鍵觸發抽獎
+      phoneInput.addEventListener('keypress', function(event) {
+        if (event.key === 'Enter') {
+          event.preventDefault(); // 阻止 Enter 鍵預設行為
+          drawPrize();
+        }
+      });
+
+      // 當輸入框內容改變時隱藏錯誤訊息
+      phoneInput.addEventListener('input', hideError);
+    });
+  </script>
 </body>
 </html>
