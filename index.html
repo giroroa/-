@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>抽獎系統</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#10b981">
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center px-4">
+  <div class="bg-white p-6 rounded shadow-md w-full max-w-md text-center">
+    <h1 class="text-2xl font-bold mb-4">抽獎系統</h1>
+    <input id="phoneInput" type="tel" maxlength="10" placeholder="輸入手機號碼" class="mb-4 p-2 border rounded w-full text-center" />
+    <button id="drawBtn" onclick="drawPrize()" class="bg-green-500 text-white py-2 px-4 rounded w-full hover:bg-green-600">開始抽獎</button>
+    <div id="animation" class="my-4 hidden text-lg font-semibold animate-spin">🎉 抽獎中...</div>
+    <div id="result" class="text-xl font-bold text-green-600 my-4"></div>
+    <div id="historyTitle" class="text-gray-800 font-semibold mt-6">📜 今日抽獎紀錄</div>
+    <ul id="recordList" class="text-sm text-left max-h-48 overflow-y-auto mt-2"></ul>
+  </div>
+
+  <script>
+    const apiUrl = "https://script.google.com/macros/s/AKfycbzqrJqwsLSjBIlAZkMwpApZTrbCoCbJgXHOEirGhcVPJp--e-6AgvRQqA0MqDjxM9BSLg/exec";
+
+    async function drawPrize() {
+      const phone = document.getElementById("phoneInput").value.trim();
+      if (!/^09\d{8}$/.test(phone)) return alert("請輸入正確的手機號碼");
+
+      document.getElementById("drawBtn").disabled = true;
+      const animation = document.getElementById("animation");
+      animation.classList.remove("hidden");
+      document.getElementById("result").textContent = "";
+
+      let dots = 1;
+      const loading = setInterval(() => {
+        animation.textContent = "🎉 抽獎中" + ".".repeat(dots++ % 4);
+      }, 300);
+
+      try {
+        const res = await fetch(apiUrl, {
+          method: "POST",
+          body: JSON.stringify({ action: "draw", phone }),
+          headers: { "Content-Type": "application/json" }
+        });
+        const data = await res.json();
+        clearInterval(loading);
+        animation.classList.add("hidden");
+        document.getElementById("result").textContent = `🎁 抽中：${data.result}`;
+        loadRecords();
+      } catch (err) {
+        alert("抽獎失敗，請稍後再試");
+        clearInterval(loading);
+      } finally {
+        document.getElementById("drawBtn").disabled = false;
+      }
+    }
+
+    async function loadRecords() {
+      const res = await fetch(apiUrl + "?action=getRecords");
+      const data = await res.json();
+      const list = document.getElementById("recordList");
+      list.innerHTML = "";
+      const today = new Date().toISOString().split("T")[0];
+      data.filter(r => r.time.startsWith(today)).reverse().forEach(r => {
+        const li = document.createElement("li");
+        li.textContent = `[${r.time.slice(11, 16)}] ${r.phone} → ${r.result}`;
+        list.appendChild(li);
+      });
+    }
+
+    loadRecords();
+  </script>
+</body>
+</html>
